@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1117">
+<title>BATTERY_PWR 車用電源控制器</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --on: #2ea043;
+    --on-glow: rgba(46, 160, 67, 0.45);
+    --off: #6e7681;
+    --err: #f85149;
+    --accent: #388bfd;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: max(20px, env(safe-area-inset-top)) 20px 32px;
+  }
+  header { text-align: center; margin-bottom: 20px; }
+  header h1 { font-size: 1.35rem; letter-spacing: 0.05em; }
+  header p { color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
+
+  .card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .conn-row { display: flex; align-items: center; gap: 12px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--off); flex: none; transition: background 0.3s; }
+  .dot.connected { background: var(--on); box-shadow: 0 0 8px var(--on-glow); }
+  .dot.connecting { background: #d29922; animation: blink 0.8s infinite alternate; }
+  @keyframes blink { from { opacity: 1; } to { opacity: 0.3; } }
+  #connLabel { flex: 1; font-size: 0.95rem; color: var(--muted); }
+  button {
+    font: inherit;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #21262d;
+    color: var(--text);
+    padding: 10px 18px;
+    cursor: pointer;
+  }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  #btnConnect.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .power-area { display: flex; flex-direction: column; align-items: center; padding: 28px 20px; }
+  #btnPower {
+    width: 170px;
+    height: 170px;
+    border-radius: 50%;
+    border: 6px solid var(--border);
+    background: radial-gradient(circle at 50% 35%, #21262d, #161b22);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  #btnPower svg { width: 56px; height: 56px; stroke: var(--off); transition: stroke 0.25s; }
+  #btnPower .plabel { font-size: 1rem; color: var(--muted); letter-spacing: 0.15em; }
+  #btnPower.is-on { border-color: var(--on); box-shadow: 0 0 32px var(--on-glow), inset 0 0 24px rgba(46,160,67,0.15); }
+  #btnPower.is-on svg { stroke: var(--on); }
+  #btnPower.is-on .plabel { color: var(--on); }
+  .state-text { margin-top: 18px; font-size: 1.05rem; color: var(--muted); }
+  .state-text b { color: var(--text); }
+
+  #log {
+    width: 100%;
+    max-width: 420px;
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    height: 150px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .log-title { max-width: 420px; width: 100%; color: var(--muted); font-size: 0.78rem; margin: 4px 0 6px 4px; }
+  footer { margin-top: 14px; color: #484f58; font-size: 0.7rem; text-align: center; }
+  #noBle {
+    display: none;
+    max-width: 420px;
+    background: rgba(248, 81, 73, 0.1);
+    border: 1px solid var(--err);
+    color: var(--err);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>BATTERY_PWR</h1>
+  <p>藍牙車用電源控制器 · BMF / BTS50007</p>
+</header>
+
+<div id="noBle">此瀏覽器不支援 Web Bluetooth。iPhone 請使用 <b>Bluefy</b> App 開啟本頁；Android/PC 請用 Chrome。</div>
+
+<div class="card">
+  <div class="conn-row">
+    <div class="dot" id="dot"></div>
+    <span id="connLabel">未連線</span>
+    <button id="btnConnect" class="primary">連線</button>
+  </div>
+</div>
+
+<div class="card power-area">
+  <button id="btnPower" disabled aria-label="電源開關">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round">
+      <path d="M12 3v9"/>
+      <path d="M6.2 6.2a8 8 0 1 0 11.6 0"/>
+    </svg>
+    <span class="plabel" id="plabel">OFF</span>
+  </button>
+  <div class="state-text">電源狀態：<b id="stateText">--</b></div>
+</div>
+
+<div class="log-title">連線紀錄</div>
+<div id="log"></div>
+
+<footer>Service 0xFFB0 · Char 0xFFB1 · a0939219021/BATTERY_PWR_TW</footer>
+
+<script>
+const SERVICE_UUID = 0xFFB0;
+const CHAR_UUID    = 0xFFB1;
+const PWR_ON  = 0x01;
+const PWR_OFF = 0x00;
+
+let device = null;
+let pwrChar = null;
+let powerState = null;   // null = unknown, 0 = off, 1 = on
+let busy = false;
+
+const $ = (id) => document.getElementById(id);
+
+function log(msg, isErr) {
+  const el = $('log');
+  const t = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+  el.textContent += `[${t}] ${msg}\n`;
+  el.scrollTop = el.scrollHeight;
+  if (isErr) console.error(msg); else console.log(msg);
+}
+
+function setConnUI(state, name) {
+  const dot = $('dot'), label = $('connLabel'), btn = $('btnConnect');
+  dot.className = 'dot';
+  if (state === 'connected') {
+    dot.classList.add('connected');
+    label.textContent = `已連線：${name || '裝置'}`;
+    btn.textContent = '中斷';
+    $('btnPower').disabled = false;
+  } else if (state === 'connecting') {
+    dot.classList.add('connecting');
+    label.textContent = '連線中…';
+    btn.textContent = '連線';
+    btn.disabled = true;
+    $('btnPower').disabled = true;
+  } else {
+    label.textContent = '未連線';
+    btn.textContent = '連線';
+    btn.disabled = false;
+    $('btnPower').disabled = true;
+    setPowerUI(null);
+  }
+  if (state !== 'connecting') btn.disabled = false;
+}
+
+function setPowerUI(state) {
+  powerState = state;
+  const btn = $('btnPower');
+  if (state === 1) {
+    btn.classList.add('is-on');
+    $('plabel').textContent = 'ON';
+    $('stateText').textContent = '開啟（BTS50007 輸出中）';
+  } else if (state === 0) {
+    btn.classList.remove('is-on');
+    $('plabel').textContent = 'OFF';
+    $('stateText').textContent = '關閉';
+  } else {
+    btn.classList.remove('is-on');
+    $('plabel').textContent = '--';
+    $('stateText').textContent = '--';
+  }
+}
+
+function onNotify(ev) {
+  const v = ev.target.value.getUint8(0);
+  log(`通知：電源狀態 = ${v === 1 ? 'ON' : 'OFF'}`);
+  setPowerUI(v === 1 ? 1 : 0);
+}
+
+function onDisconnected() {
+  log('已中斷連線');
+  pwrChar = null;
+  setConnUI('disconnected');
+}
+
+async function connect() {
+  if (device && device.gatt.connected) {
+    device.gatt.disconnect();
+    return;
+  }
+  if (!navigator.bluetooth) {
+    $('noBle').style.display = 'block';
+    log('navigator.bluetooth 不存在', true);
+    return;
+  }
+  try {
+    setConnUI('connecting');
+    log('掃描裝置（Service 0xFFB0）…');
+    device = await navigator.bluetooth.requestDevice({
+      filters: [ { services: [SERVICE_UUID] }, { namePrefix: 'BMF' }, { namePrefix: 'BATTERY' } ],
+      optionalServices: [SERVICE_UUID]
+    });
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+    log(`選擇：${device.name || device.id}，建立 GATT 連線…`);
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    pwrChar = await service.getCharacteristic(CHAR_UUID);
+
+    try {
+      await pwrChar.startNotifications();
+      pwrChar.addEventListener('characteristicvaluechanged', onNotify);
+      log('已訂閱狀態通知');
+    } catch (e) {
+      log('通知訂閱失敗（改用讀取）：' + e.message);
+    }
+
+    const val = await pwrChar.readValue();
+    const s = val.getUint8(0);
+    setPowerUI(s === 1 ? 1 : 0);
+    setConnUI('connected', device.name);
+    log(`連線完成，目前電源：${s === 1 ? 'ON' : 'OFF'}`);
+  } catch (e) {
+    log('連線失敗：' + e.message, true);
+    setConnUI('disconnected');
+  }
+}
+
+async function togglePower() {
+  if (!pwrChar || busy) return;
+  busy = true;
+  const target = powerState === 1 ? PWR_OFF : PWR_ON;
+  try {
+    await pwrChar.writeValue(new Uint8Array([target]));
+    log(`已送出：電源 ${target === PWR_ON ? 'ON' : 'OFF'}`);
+    setPowerUI(target === PWR_ON ? 1 : 0);
+    setTimeout(async () => {
+      try {
+        const val = await pwrChar.readValue();
+        setPowerUI(val.getUint8(0) === 1 ? 1 : 0);
+      } catch (e) {}
+    }, 400);
+  } catch (e) {
+    log('寫入失敗：' + e.message, true);
+  } finally {
+    busy = false;
+  }
+}
+
+$('btnConnect').addEventListener('click', connect);
+$('btnPower').addEventListener('click', togglePower);
+
+if (!navigator.bluetooth) {
+  $('noBle').style.display = 'block';
+} else {
+  log('就緒。按「連線」選擇 BMF_POWER 裝置。');
+}
+</script>
+</body>
+</html>
