@@ -145,13 +145,19 @@
 <div class="log-title">連線紀錄</div>
 <div id="log"></div>
 
-<footer>Service 0xFFB0 · Char 0xFFB1 · a0939219021/BATTERY_PWR_TW</footer>
+<footer>Service 0xFFB0 · Char 0xFFB1 · a0939219021/BATTERY_PWR_TW · v1.1</footer>
 
 <script>
-const SERVICE_UUID = 0xFFB0;
-const CHAR_UUID    = 0xFFB1;
+// 128-bit 字串形式 — Bluefy 對 16-bit 數字別名支援不完整
+const SERVICE_UUID = '0000ffb0-0000-1000-8000-00805f9b34fb';
+const CHAR_UUID    = '0000ffb1-0000-1000-8000-00805f9b34fb';
 const PWR_ON  = 0x01;
 const PWR_OFF = 0x00;
+
+function errText(e) {
+  if (!e) return '(unknown)';
+  return e.message || e.name || String(e);
+}
 
 let device = null;
 let pwrChar = null;
@@ -235,10 +241,20 @@ async function connect() {
   try {
     setConnUI('connecting');
     log('掃描裝置（Service 0xFFB0）…');
-    device = await navigator.bluetooth.requestDevice({
-      filters: [ { services: [SERVICE_UUID] }, { namePrefix: 'BMF' }, { namePrefix: 'BATTERY' } ],
-      optionalServices: [SERVICE_UUID]
-    });
+    try {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [ { services: [SERVICE_UUID] }, { namePrefix: 'BMF' }, { namePrefix: 'BATTERY' } ],
+        optionalServices: [SERVICE_UUID]
+      });
+    } catch (e1) {
+      if (e1 && e1.name === 'NotFoundError') throw e1;   // 使用者取消選擇
+      // Bluefy 等瀏覽器對 filters 支援不完整 → 退回全裝置掃描
+      log('過濾掃描不支援（' + errText(e1) + '），改用全裝置掃描，請從清單選 BMF_POWER…');
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [SERVICE_UUID]
+      });
+    }
     device.addEventListener('gattserverdisconnected', onDisconnected);
     log(`選擇：${device.name || device.id}，建立 GATT 連線…`);
     const server = await device.gatt.connect();
@@ -250,7 +266,7 @@ async function connect() {
       pwrChar.addEventListener('characteristicvaluechanged', onNotify);
       log('已訂閱狀態通知');
     } catch (e) {
-      log('通知訂閱失敗（改用讀取）：' + e.message);
+      log('通知訂閱失敗（改用讀取）：' + errText(e));
     }
 
     const val = await pwrChar.readValue();
@@ -259,7 +275,7 @@ async function connect() {
     setConnUI('connected', device.name);
     log(`連線完成，目前電源：${s === 1 ? 'ON' : 'OFF'}`);
   } catch (e) {
-    log('連線失敗：' + e.message, true);
+    log('連線失敗：' + errText(e), true);
     setConnUI('disconnected');
   }
 }
@@ -279,7 +295,7 @@ async function togglePower() {
       } catch (e) {}
     }, 400);
   } catch (e) {
-    log('寫入失敗：' + e.message, true);
+    log('寫入失敗：' + errText(e), true);
   } finally {
     busy = false;
   }
