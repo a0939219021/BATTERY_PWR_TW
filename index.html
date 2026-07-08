@@ -85,22 +85,6 @@
   .state-text { margin-top: 18px; font-size: 1.05rem; color: var(--muted); }
   .state-text b { color: var(--text); }
 
-  #log {
-    width: 100%;
-    max-width: 420px;
-    background: #010409;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.72rem;
-    color: var(--muted);
-    height: 150px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
-  .log-title { max-width: 420px; width: 100%; color: var(--muted); font-size: 0.78rem; margin: 4px 0 6px 4px; }
   footer { margin-top: 14px; color: #484f58; font-size: 0.7rem; text-align: center; }
   #noBle {
     display: none;
@@ -118,7 +102,7 @@
 <body>
 <header>
   <h1>BATTERY_PWR</h1>
-  <p>藍牙車用電源控制器 · BMF / BTS50007</p>
+  <p>藍牙車用電源控制器</p>
 </header>
 
 <div id="noBle">此瀏覽器不支援 Web Bluetooth。iPhone 請使用 <b>Bluefy</b> App 開啟本頁；Android/PC 請用 Chrome。</div>
@@ -142,10 +126,7 @@
   <div class="state-text">電源狀態：<b id="stateText">--</b></div>
 </div>
 
-<div class="log-title">連線紀錄</div>
-<div id="log"></div>
-
-<footer>Service 0xFFB0 · Char 0xFFB1 · a0939219021/BATTERY_PWR_TW · v1.1</footer>
+<footer>BATTERY_PWR · v1.2</footer>
 
 <script>
 // 128-bit 字串形式 — Bluefy 對 16-bit 數字別名支援不完整
@@ -167,10 +148,6 @@ let busy = false;
 const $ = (id) => document.getElementById(id);
 
 function log(msg, isErr) {
-  const el = $('log');
-  const t = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-  el.textContent += `[${t}] ${msg}\n`;
-  el.scrollTop = el.scrollHeight;
   if (isErr) console.error(msg); else console.log(msg);
 }
 
@@ -204,7 +181,7 @@ function setPowerUI(state) {
   if (state === 1) {
     btn.classList.add('is-on');
     $('plabel').textContent = 'ON';
-    $('stateText').textContent = '開啟（BTS50007 輸出中）';
+    $('stateText').textContent = '開啟（輸出中）';
   } else if (state === 0) {
     btn.classList.remove('is-on');
     $('plabel').textContent = 'OFF';
@@ -306,8 +283,6 @@ $('btnPower').addEventListener('click', togglePower);
 
 if (!navigator.bluetooth) {
   $('noBle').style.display = 'block';
-} else {
-  log('就緒。按「連線」選擇 BMF_POWER 裝置。');
 }
 </script>
 </body>
